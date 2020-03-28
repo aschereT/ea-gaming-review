@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+ea-gaming-review
 
 # Test binary, built with `go test -c`
 *.test

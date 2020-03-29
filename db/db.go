@@ -7,18 +7,18 @@ import (
 
 //BlogPost represents a single blog post
 type BlogPost struct {
-	ID          string
-	Title       string
-	ArticleText string
-	AuthorName  string
+	ID          string `json:"ID"`
+	Title       string `json:"Title"`
+	ArticleText string `json:"ArticleText"`
+	AuthorName  string `json:"AuthorName"`
 }
 
 //Comment represents a comment on a BlogPost
 type Comment struct {
-	ID          string
-	ArticleID   string
-	CommentText string
-	AuthorName  string
+	ID          string `json:"ID"`
+	ArticleID   string `json:"ArticleID"`
+	CommentText string `json:"CommentText"`
+	AuthorName  string `json:"AuthorName"`
 }
 
 const BlogPostTable = "BlogPost"
@@ -90,10 +90,9 @@ func CreateDB() (*memdb.MemDB, error) {
 	return db, nil
 }
 
-
 func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) {
 	txn := inMemDB.Txn(true)
-	
+
 	id = ksuid.New().String()
 	post.ID = id
 	err = txn.Insert(BlogPostTable, post)
@@ -110,7 +109,7 @@ func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) 
 func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
-	
+
 	it, err := txn.Get(BlogPostTable, "id")
 	if err != nil {
 		return nil, err
@@ -122,4 +121,19 @@ func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
 	}
 
 	return ids, nil
+}
+
+func GetBlogPost(inMemDB *memdb.MemDB, id string) (post BlogPost, err error) {
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	it, err := txn.Get(BlogPostTable, "id", id)
+	if err != nil {
+		return
+	}
+
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		post = obj.(BlogPost)
+	}
+	return
 }

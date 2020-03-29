@@ -16,11 +16,11 @@ type Response struct {
 }
 
 type CreateBlogPostResponse struct {
-	ID string `json:"ID,omitempty"`
+	ID string `json:"ID"`
 }
 
-type GetBlogPostResponse struct {
-	IDs []string `json:"IDs,omitempty"`
+type GetBlogPostIDsResponse struct {
+	IDs []string `json:"IDs"`
 }
 
 var (
@@ -31,13 +31,13 @@ func healthCheck(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "server_up\n")
 }
 
-func getBlogPosts(w http.ResponseWriter, req *http.Request) {
+func getBlogPostsIDsHandler(w http.ResponseWriter, req *http.Request) {
 	const funcname = "getBlogPosts"
 	ids, err := db.GetBlogIDs(inMemDB)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		fmt.Println(fmt.Errorf("%s : Error getting blog IDs: %w", funcname, err))
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		resp, jsonErr := json.Marshal(Response{Data: nil, Error: err})
 		if jsonErr != nil {
 			fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
@@ -48,8 +48,8 @@ func getBlogPosts(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Println(funcname, ": Got blog IDs", len(ids))
-	w.WriteHeader(200)
-	resp, err := json.Marshal(Response{Data: GetBlogPostResponse{IDs: ids}})
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: GetBlogPostIDsResponse{IDs: ids}})
 	if err != nil {
 		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
 	} else {
@@ -58,13 +58,43 @@ func getBlogPosts(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-func createBlogPost(w http.ResponseWriter, req *http.Request) {
+func getSingleBlogPostHandler(w http.ResponseWriter, req *http.Request) {
+	const funcname = "getABlogPost"
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	post, err := db.GetBlogPost(inMemDB, id)
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		fmt.Println(fmt.Errorf("%s : Error getting blog post %s: %w", funcname, id, err))
+		w.WriteHeader(http.StatusInternalServerError)
+		resp, jsonErr := json.Marshal(Response{Data: nil, Error: err})
+		if jsonErr != nil {
+			fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
+		} else {
+			w.Write(resp)
+		}
+		return
+	}
+
+	fmt.Println(funcname, ": Got blog post", id)
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: post})
+	if err != nil {
+		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+	} else {
+		w.Write(resp)
+	}
+	return
+}
+
+func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	const funcname = "createBlogPost"
 	id, err := db.CreateBlogPost(inMemDB, db.BlogPost{ArticleText: "testtext", AuthorName: "testname", Title: "testtitle"})
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		fmt.Println(fmt.Errorf("%s : Error creating new blog post: %w", funcname, err))
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		resp, jsonErr := json.Marshal(Response{Data: nil, Error: err})
 		if jsonErr != nil {
 			fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
@@ -75,7 +105,7 @@ func createBlogPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Println(funcname, ": Created new blog post", id)
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 	resp, err := json.Marshal(Response{Data: CreateBlogPostResponse{ID: id}})
 	if err != nil {
 		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
@@ -85,7 +115,7 @@ func createBlogPost(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-func deleteBlogPost(w http.ResponseWriter, req *http.Request) {
+func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 
 }
 
@@ -93,9 +123,11 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/health", healthCheck).Methods(http.MethodGet)
 
-	r.HandleFunc("/blog", getBlogPosts).Methods(http.MethodGet)
-	r.HandleFunc("/blog", createBlogPost).Methods(http.MethodPost)
-	r.HandleFunc("/blog", deleteBlogPost).Methods(http.MethodDelete)
+	r.HandleFunc("/blog", getBlogPostsIDsHandler).Methods(http.MethodGet)
+	r.HandleFunc("/blog", createBlogPostHandler).Methods(http.MethodPost)
+	r.HandleFunc("/blog", deleteBlogPostHandler).Methods(http.MethodDelete)
+
+	r.HandleFunc("/blog/{id}", getSingleBlogPostHandler).Methods(http.MethodGet)
 
 	http.Handle("/", r)
 

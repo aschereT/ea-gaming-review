@@ -58,7 +58,7 @@ func respondWithError(w http.ResponseWriter, statusCode int, err error) {
 }
 
 func getBlogPostsIDsHandler(w http.ResponseWriter, req *http.Request) {
-	const funcname = "getBlogPosts"
+	const funcname = "getBlogPostsIDsHandler"
 	w.Header().Set("Content-Type", "application/json")
 
 	ids, err := db.GetBlogIDs(inMemDB)
@@ -80,7 +80,7 @@ func getBlogPostsIDsHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func getSingleBlogPostHandler(w http.ResponseWriter, req *http.Request) {
-	const funcname = "getABlogPost"
+	const funcname = "getSingleBlogPostHandler"
 	w.Header().Set("Content-Type", "application/json")
 
 	vars := mux.Vars(req)
@@ -110,7 +110,7 @@ func getSingleBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
-	const funcname = "createBlogPost"
+	const funcname = "createBlogPostHandler"
 	w.Header().Set("Content-Type", "application/json")
 
 	defer req.Body.Close()
@@ -171,10 +171,36 @@ func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
+	const funcname = "deleteBlogPostHandler"
+	w.Header().Set("Content-Type", "application/json")
 
+	vars := mux.Vars(req)
+	id := vars["id"]
+	exists, err := db.DeleteBlogPost(inMemDB, id)
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error deleting blog post"))
+		return
+	}
+	if !exists {
+		err = fmt.Errorf("No post found with ID %s", id)
+		logError(funcname, err)
+		respondWithError(w, http.StatusNotFound, err)
+		return
+	}
+
+	log(funcname, "Deleted blog post", id)
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: "OK"})
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
+	} else {
+		w.Write(resp)
+	}
 }
 
-func setupTestDB() *memdb.MemDB {
+func setupDB() *memdb.MemDB {
 	newDB, err := db.CreateDB()
 	if err != nil {
 		panic(err)
@@ -195,7 +221,7 @@ func main() {
 
 	http.Handle("/", r)
 
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 
 	const DefaultAddr = ":8080"
 	envPort, exists := os.LookupEnv("EASERV_PORT")

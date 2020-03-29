@@ -73,7 +73,7 @@ func Test_RespondWithError(t *testing.T) {
 
 func Test_CreateBlogPostHappy(t *testing.T) {
 	//set up in-mem db, and tear down after
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
 	}()
@@ -132,7 +132,7 @@ func Test_CreateBlogPostHappy(t *testing.T) {
 
 func Test_CreateBlogPostMissingTitle(t *testing.T) {
 	//set up in-mem db, and tear down after
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
 	}()
@@ -173,7 +173,7 @@ func Test_CreateBlogPostMissingTitle(t *testing.T) {
 
 func Test_CreateBlogPostWithID(t *testing.T) {
 	//set up in-mem db, and tear down after
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
 	}()
@@ -214,7 +214,7 @@ func Test_CreateBlogPostWithID(t *testing.T) {
 
 func Test_CreateBlogPostMissingArticleText(t *testing.T) {
 	//set up in-mem db, and tear down after
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
 	}()
@@ -255,7 +255,7 @@ func Test_CreateBlogPostMissingArticleText(t *testing.T) {
 
 func Test_CreateBlogPostMissingAuthorName(t *testing.T) {
 	//set up in-mem db, and tear down after
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
 	}()
@@ -295,7 +295,7 @@ func Test_CreateBlogPostMissingAuthorName(t *testing.T) {
 }
 
 func Test_GetBlogPostIDsEmpty(t *testing.T) {
-	inMemDB = setupTestDB()
+	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
 	}()

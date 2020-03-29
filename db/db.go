@@ -133,16 +133,35 @@ func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
 
-	it, err := txn.Get(BlogPostTable, "id", id)
+	foundObj, err := txn.First(BlogPostTable, "id", id)
 	if err != nil {
 		return
 	}
-
-	for obj := it.Next(); obj != nil; obj = it.Next() {
-		p := obj.(BlogPost)
-		post = &p
-		return post, nil
+	if foundObj == nil {
+		return nil, nil
 	}
 
-	return nil, nil
+	foundPost := foundObj.(BlogPost)
+	return &foundPost, nil
+}
+
+//Deletes a single post. exists indicates if err is 404 or something else
+func DeleteBlogPost(inMemDB *memdb.MemDB, id string) (exists bool, err error) {
+	toDeleteObject, err := GetBlogPost(inMemDB, id)
+	if err != nil {
+		return false, err
+	}
+	if toDeleteObject == nil {
+		return false, nil
+	}
+
+	txn := inMemDB.Txn(true)
+	err = txn.Delete(BlogPostTable, toDeleteObject)
+	if err != nil {
+		txn.Abort()
+		return true, err
+	}
+
+	txn.Commit()
+	return true, nil
 }

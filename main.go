@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/aschereT/ea-gaming-review/db"
 	"github.com/gorilla/mux"
@@ -31,16 +33,23 @@ func healthCheckHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "server_up")
 }
 
+func logError(funcname string, err error) {
+	fmt.Printf("[%s] %s: %w\n", time.Now().String(), funcname, err)
+}
+
+func log(funcname string, a ...interface{}) {
+	fmt.Println(fmt.Sprintf("[%s] %s:", time.Now().String(), funcname), a)
+}
+
 //immediately respond with Data nil: and Error: err
 func respondWithError(w http.ResponseWriter, statusCode int, err error) {
 	const funcname = "respondWithError"
 	w.Header().Set("Content-Type", "application/json")
 
-	fmt.Println(err)
 	w.WriteHeader(statusCode)
 	resp, jsonErr := json.Marshal(Response{Data: nil, Error: fmt.Sprint(err)})
 	if jsonErr != nil {
-		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
+		logError(funcname, fmt.Errorf("Error marshalling error response: %w", jsonErr))
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(nil)
 	} else {
@@ -54,15 +63,17 @@ func getBlogPostsIDsHandler(w http.ResponseWriter, req *http.Request) {
 
 	ids, err := db.GetBlogIDs(inMemDB)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error getting blog IDs: %w", funcname, err))
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error getting blog IDs"))
 		return
 	}
 
-	fmt.Println(funcname, ": Got blog IDs", len(ids))
+	log(funcname, "Got", len(ids), "blog IDs")
 	w.WriteHeader(http.StatusOK)
 	resp, err := json.Marshal(Response{Data: GetBlogPostIDsResponse{IDs: ids}})
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling error response"))
 	} else {
 		w.Write(resp)
 	}
@@ -76,19 +87,23 @@ func getSingleBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	id := vars["id"]
 	post, err := db.GetBlogPost(inMemDB, id)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error getting blog post"))
 		return
 	}
 	if post == nil {
-		respondWithError(w, http.StatusNotFound, fmt.Errorf("%s : No such post found, %s", funcname, id))
+		err = fmt.Errorf("No post found with ID %s", id)
+		logError(funcname, err)
+		respondWithError(w, http.StatusNotFound, err)
 		return
 	}
 
-	fmt.Println(funcname, ": Got blog post", id)
+	log(funcname, "Got blog post", id)
 	w.WriteHeader(http.StatusOK)
 	resp, err := json.Marshal(Response{Data: *post})
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
 	} else {
 		w.Write(resp)
 	}
@@ -104,21 +119,52 @@ func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	var newPost db.BlogPost
 	err := dec.Decode(&newPost)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error decoding body: %w", funcname, err))
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error decoding request body"))
 		return
 	}
+
+	log(funcname, "Received request to create new blog post", fmt.Sprintf("%#v", newPost))
+	if newPost.Title == "" {
+		err := fmt.Errorf("Title should not be empty")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	if newPost.ArticleText == "" {
+		err := fmt.Errorf("ArticleText should not be empty")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	if newPost.AuthorName == "" {
+		err := fmt.Errorf("ArticleText should not be empty")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	if newPost.ID != "" {
+		//should be empty
+		err := fmt.Errorf("ID should not be defined in new post requests")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	log(funcname, "Request looks legit", fmt.Sprintf("%#v", newPost))
 
 	id, err := db.CreateBlogPost(inMemDB, newPost)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error creating new blog post: %w", funcname, err))
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error creating new blog post"))
 		return
 	}
 
-	fmt.Println(funcname, ": Created new blog post", id)
+	log(funcname, "Created new blog post", id)
 	w.WriteHeader(http.StatusOK)
 	resp, err := json.Marshal(Response{Data: CreateBlogPostResponse{ID: id}})
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
 	} else {
 		w.Write(resp)
 	}
@@ -128,25 +174,37 @@ func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 
 }
 
+func setupTestDB() *memdb.MemDB {
+	newDB, err := db.CreateDB()
+	if err != nil {
+		panic(err)
+	}
+	return newDB
+}
+
 func main() {
+	const funcname = "main"
 	r := mux.NewRouter()
 	r.HandleFunc("/health", healthCheckHandler).Methods(http.MethodGet)
 
 	r.HandleFunc("/blog", getBlogPostsIDsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog", createBlogPostHandler).Methods(http.MethodPost)
-	
+
 	r.HandleFunc("/blog/{id}", getSingleBlogPostHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog/{id}", deleteBlogPostHandler).Methods(http.MethodDelete)
 
 	http.Handle("/", r)
 
-	newDB, err := db.CreateDB()
+	inMemDB = setupTestDB()
+
+	const DefaultAddr = ":8080"
+	envPort, exists := os.LookupEnv("EASERV_PORT")
+	if !exists {
+		envPort = DefaultAddr
+	}
+	log(funcname, "server up, listening at", envPort)
+	err := http.ListenAndServe(envPort, nil)
 	if err != nil {
 		panic(err)
 	}
-	inMemDB = newDB
-
-	fmt.Println("main: server up, listening at :8080")
-	http.ListenAndServe(":8080", nil)
-
 }

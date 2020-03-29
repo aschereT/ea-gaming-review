@@ -10,9 +10,15 @@ I want a way to create blog posts for my video game reviews
 
 So that I can share my reviews in a way that my readers can respond to
 
+## Acceptance Criteria
+
+A blog post will show a title, article text (plain text) and an author name 
+
+Comments are made on blog posts and show comment text (plain text) and an author name 
+
 ## Endpoints
 
-GET /blog -> returns list of blog posts (pagination?)
+GET /blog -> returns list of blog posts IDs (pagination?)
 POST /blog -> add a new posts
 
 GET /blog/?id -> returns a blog post (without comments)

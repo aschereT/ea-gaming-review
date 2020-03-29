@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/docker/distribution v2.7.1+incompatible // indirect
+	github.com/gogo/protobuf v1.3.1
 	github.com/gorilla/mux v1.7.4
 	github.com/hashicorp/go-immutable-radix v1.2.0 // indirect
 	github.com/hashicorp/go-memdb v1.1.1

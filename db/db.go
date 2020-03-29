@@ -80,6 +80,7 @@ var InMemSchema = &memdb.DBSchema{
 	},
 }
 
+//Initialise the in-memory database
 func CreateDB() (*memdb.MemDB, error) {
 	// Create a new data base
 	db, err := memdb.NewMemDB(InMemSchema)
@@ -90,6 +91,7 @@ func CreateDB() (*memdb.MemDB, error) {
 	return db, nil
 }
 
+//Inserts a new post, generating a unique ID for it and returning that
 func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) {
 	txn := inMemDB.Txn(true)
 
@@ -103,9 +105,12 @@ func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) 
 	}
 
 	txn.Commit()
-	return
+
+	return id, nil
 }
 
+//Returns a list of all blog IDs
+//TODO: pagination?
 func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
@@ -123,6 +128,7 @@ func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
 	return ids, nil
 }
 
+//Gets a single post. post is nil if such post is not found
 func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
@@ -135,7 +141,8 @@ func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
 	for obj := it.Next(); obj != nil; obj = it.Next() {
 		p := obj.(BlogPost)
 		post = &p
-		return
+		return post, nil
 	}
-	return
+
+	return nil, nil
 }

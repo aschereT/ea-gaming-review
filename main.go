@@ -31,6 +31,7 @@ func healthCheckHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "server_up")
 }
 
+//immediately respond with Data nil: and Error: err
 func respondWithError(w http.ResponseWriter, statusCode int, err error) {
 	const funcname = "respondWithError"
 	w.Header().Set("Content-Type", "application/json")

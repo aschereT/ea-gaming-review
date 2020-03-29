@@ -27,8 +27,8 @@ var (
 	inMemDB *memdb.MemDB
 )
 
-func healthCheck(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "server_up\n")
+func healthCheckHandler(w http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(w, "server_up")
 }
 
 func respondWithError(w http.ResponseWriter, statusCode int, err error) {
@@ -129,7 +129,7 @@ func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	r := mux.NewRouter()
-	r.HandleFunc("/health", healthCheck).Methods(http.MethodGet)
+	r.HandleFunc("/health", healthCheckHandler).Methods(http.MethodGet)
 
 	r.HandleFunc("/blog", getBlogPostsIDsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog", createBlogPostHandler).Methods(http.MethodPost)

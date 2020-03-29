@@ -1,6 +1,7 @@
 # ea-gaming-review
 
 ![Docker Image CI](https://github.com/aschereT/ea-gaming-review/workflows/Docker%20Image%20CI/badge.svg)
+![Go](https://github.com/aschereT/ea-gaming-review/workflows/Go/badge.svg)
 
 ## User Story
 

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 func healthCheck(w http.ResponseWriter, req *http.Request) {
@@ -10,7 +12,10 @@ func healthCheck(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/health", healthCheck)
+	r := mux.NewRouter()
+	r.HandleFunc("/health", healthCheck)
+
+	http.Handle("/", r)
 
 	http.ListenAndServe(":8080", nil)
 }

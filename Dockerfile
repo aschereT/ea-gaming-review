@@ -1,7 +1,7 @@
 FROM golang:1.14.1-alpine3.11 AS build
 
 WORKDIR /app
-ADD * ./
+ADD . .
 
 # RUN go build -ldflags="-s -w" -o ea-gaming-review
 RUN go build -o ea-gaming-review

@@ -123,7 +123,7 @@ func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
 	return ids, nil
 }
 
-func GetBlogPost(inMemDB *memdb.MemDB, id string) (post BlogPost, err error) {
+func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
 
@@ -133,7 +133,9 @@ func GetBlogPost(inMemDB *memdb.MemDB, id string) (post BlogPost, err error) {
 	}
 
 	for obj := it.Next(); obj != nil; obj = it.Next() {
-		post = obj.(BlogPost)
+		p := obj.(BlogPost)
+		post = &p
+		return
 	}
 	return
 }

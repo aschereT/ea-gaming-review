@@ -12,7 +12,7 @@ import (
 
 type Response struct {
 	Data  interface{} `json:"Data,omitempty"`
-	Error error       `json:"Error,omitempty"`
+	Error string      `json:"Error,omitempty"`
 }
 
 type CreateBlogPostResponse struct {
@@ -31,19 +31,29 @@ func healthCheck(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "server_up\n")
 }
 
+func respondWithError(w http.ResponseWriter, statusCode int, err error) {
+	const funcname = "respondWithError"
+	w.Header().Set("Content-Type", "application/json")
+
+	fmt.Println(err)
+	w.WriteHeader(statusCode)
+	resp, jsonErr := json.Marshal(Response{Data: nil, Error: fmt.Sprint(err)})
+	if jsonErr != nil {
+		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(nil)
+	} else {
+		w.Write(resp)
+	}
+}
+
 func getBlogPostsIDsHandler(w http.ResponseWriter, req *http.Request) {
 	const funcname = "getBlogPosts"
-	ids, err := db.GetBlogIDs(inMemDB)
 	w.Header().Set("Content-Type", "application/json")
+
+	ids, err := db.GetBlogIDs(inMemDB)
 	if err != nil {
-		fmt.Println(fmt.Errorf("%s : Error getting blog IDs: %w", funcname, err))
-		w.WriteHeader(http.StatusInternalServerError)
-		resp, jsonErr := json.Marshal(Response{Data: nil, Error: err})
-		if jsonErr != nil {
-			fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
-		} else {
-			w.Write(resp)
-		}
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error getting blog IDs: %w", funcname, err))
 		return
 	}
 
@@ -51,56 +61,55 @@ func getBlogPostsIDsHandler(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	resp, err := json.Marshal(Response{Data: GetBlogPostIDsResponse{IDs: ids}})
 	if err != nil {
-		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
 	} else {
 		w.Write(resp)
 	}
-	return
 }
 
 func getSingleBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	const funcname = "getABlogPost"
+	w.Header().Set("Content-Type", "application/json")
 
 	vars := mux.Vars(req)
 	id := vars["id"]
 	post, err := db.GetBlogPost(inMemDB, id)
-	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
-		fmt.Println(fmt.Errorf("%s : Error getting blog post %s: %w", funcname, id, err))
-		w.WriteHeader(http.StatusInternalServerError)
-		resp, jsonErr := json.Marshal(Response{Data: nil, Error: err})
-		if jsonErr != nil {
-			fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
-		} else {
-			w.Write(resp)
-		}
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if post == nil {
+		respondWithError(w, http.StatusNotFound, fmt.Errorf("%s : No such post found, %s", funcname, id))
 		return
 	}
 
 	fmt.Println(funcname, ": Got blog post", id)
 	w.WriteHeader(http.StatusOK)
-	resp, err := json.Marshal(Response{Data: post})
+	resp, err := json.Marshal(Response{Data: *post})
 	if err != nil {
-		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
 	} else {
 		w.Write(resp)
 	}
-	return
 }
 
 func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	const funcname = "createBlogPost"
-	id, err := db.CreateBlogPost(inMemDB, db.BlogPost{ArticleText: "testtext", AuthorName: "testname", Title: "testtitle"})
 	w.Header().Set("Content-Type", "application/json")
+
+	defer req.Body.Close()
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var newPost db.BlogPost
+	err := dec.Decode(&newPost)
 	if err != nil {
-		fmt.Println(fmt.Errorf("%s : Error creating new blog post: %w", funcname, err))
-		w.WriteHeader(http.StatusInternalServerError)
-		resp, jsonErr := json.Marshal(Response{Data: nil, Error: err})
-		if jsonErr != nil {
-			fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, jsonErr))
-		} else {
-			w.Write(resp)
-		}
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error decoding body: %w", funcname, err))
+		return
+	}
+
+	id, err := db.CreateBlogPost(inMemDB, newPost)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error creating new blog post: %w", funcname, err))
 		return
 	}
 
@@ -108,11 +117,10 @@ func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	resp, err := json.Marshal(Response{Data: CreateBlogPostResponse{ID: id}})
 	if err != nil {
-		fmt.Println(fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("%s : Error marshalling error response: %w", funcname, err))
 	} else {
 		w.Write(resp)
 	}
-	return
 }
 
 func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
@@ -125,9 +133,9 @@ func main() {
 
 	r.HandleFunc("/blog", getBlogPostsIDsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog", createBlogPostHandler).Methods(http.MethodPost)
-	r.HandleFunc("/blog", deleteBlogPostHandler).Methods(http.MethodDelete)
-
+	
 	r.HandleFunc("/blog/{id}", getSingleBlogPostHandler).Methods(http.MethodGet)
+	r.HandleFunc("/blog/{id}", deleteBlogPostHandler).Methods(http.MethodDelete)
 
 	http.Handle("/", r)
 

@@ -170,23 +170,6 @@ func deleteBlogCommentIDsWithTxn(txn *memdb.Txn, articleID, commentID string) (e
 	return true, nil
 }
 
-//Inserts a new post, generating a unique ID for it and returning that
-func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) {
-	txn := inMemDB.Txn(true)
-	defer txn.Abort()
-
-	id = ksuid.New().String()
-	post.ID = id
-	err = txn.Insert(BlogPostTable, post)
-
-	if err != nil {
-		return
-	}
-
-	txn.Commit()
-	return id, nil
-}
-
 //Returns a list of all blog IDs
 //TODO: pagination?
 func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
@@ -207,11 +190,28 @@ func GetBlogIDs(inMemDB *memdb.MemDB) (ids []string, err error) {
 }
 
 //Gets a single post. post is nil if such post is not found
-func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
+func GetBlogPost(inMemDB *memdb.MemDB, articleID string) (post *BlogPost, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
 
-	return getBlogPostWithTxn(txn, id)
+	return getBlogPostWithTxn(txn, articleID)
+}
+
+//Inserts a new post, generating a unique ID for it and returning that
+func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) {
+	txn := inMemDB.Txn(true)
+	defer txn.Abort()
+
+	id = ksuid.New().String()
+	post.ID = id
+	err = txn.Insert(BlogPostTable, post)
+
+	if err != nil {
+		return
+	}
+
+	txn.Commit()
+	return id, nil
 }
 
 //Deletes a single post and its attendant comments. exists indicates if err is 404 or something else
@@ -260,7 +260,7 @@ func GetCommentIDs(inMemDB *memdb.MemDB, articleID string) (ids []string, err er
 }
 
 //Gets a single comment. comment is nil if such comment is not found
-func GetBlogComment(inMemDB *memdb.MemDB, articleID, id string) (comment *BlogComment, err error) {
+func GetBlogComment(inMemDB *memdb.MemDB, articleID, commentID string) (comment *BlogComment, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
 
@@ -272,7 +272,7 @@ func GetBlogComment(inMemDB *memdb.MemDB, articleID, id string) (comment *BlogCo
 		return nil, fmt.Errorf("No such blog post")
 	}
 
-	return getBlogCommentWithTxn(txn, id)
+	return getBlogCommentWithTxn(txn, commentID)
 }
 
 //Inserts a new comment, generating a unique ID for it and returning that

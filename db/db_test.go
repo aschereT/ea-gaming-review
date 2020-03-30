@@ -85,3 +85,28 @@ func Test_GetBlogIDs(t *testing.T) {
 		t.Errorf("Expected IDs %#v, got %#v", expected, actual)
 	}
 }
+
+
+func Test_GetBlogPost(t *testing.T) {
+	db, err := CreateDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	expected := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	for i := range expected {
+		id, err := CreateBlogPost(db, expected[i])
+		if err != nil {
+			t.Error(err)
+		}
+		expected[i].ID = id
+
+		post, err := GetBlogPost(db, id)
+		if err != nil {
+			t.Error(err)
+		}
+		if *post != expected[i] {
+			t.Errorf("Expected created post to be %#v, got %#v", expected[i], *post)
+		}
+	}
+}

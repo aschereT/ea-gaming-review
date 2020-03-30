@@ -24,6 +24,11 @@ type GetBlogPostIDsResponse struct {
 	IDs []string `json:"IDs"`
 }
 
+type GetBlogCommentsIDsResponse struct {
+	BlogPostID string   `json:"BlogPostID"`
+	IDs        []string `json:"IDs"`
+}
+
 var (
 	inMemDB *memdb.MemDB
 )
@@ -145,7 +150,7 @@ func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if newPost.AuthorName == "" {
-		err := fmt.Errorf("ArticleText should not be empty")
+		err := fmt.Errorf("AuthorName should not be empty")
 		logError(funcname, err)
 		respondWithError(w, http.StatusBadRequest, err)
 		return
@@ -207,6 +212,95 @@ func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func getBlogCommentsIDsHandler(w http.ResponseWriter, req *http.Request) {
+	const funcname = "getBlogCommentsIDsHandler"
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	ids, err := db.GetCommentIDs(inMemDB, id)
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error getting comment IDs"))
+		return
+	}
+
+	log(funcname, "Got", len(ids), "comment IDs")
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: GetBlogCommentsIDsResponse{IDs: ids, BlogPostID: id}})
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling error response"))
+	} else {
+		w.Write(resp)
+	}
+}
+
+func createBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
+	const funcname = "createBlogCommentHandler"
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(req)
+	articleID := vars["id"]
+
+	defer req.Body.Close()
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	var newPost db.BlogComment
+	err := dec.Decode(&newPost)
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error decoding request body"))
+		return
+	}
+
+	log(funcname, "Received request to create new blog post", fmt.Sprintf("%#v", newPost))
+	if newPost.CommentText == "" {
+		err := fmt.Errorf("CommentText should not be empty")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	if newPost.AuthorName == "" {
+		err := fmt.Errorf("AuthorName should not be empty")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	if newPost.ArticleID != "" {
+		err := fmt.Errorf("ArticleID should not be defined in new post requests")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	if newPost.ID != "" {
+		//should be empty
+		err := fmt.Errorf("ID should not be defined in new post requests")
+		logError(funcname, err)
+		respondWithError(w, http.StatusBadRequest, err)
+		return
+	}
+	newPost.ArticleID = articleID
+	log(funcname, "Request looks legit", fmt.Sprintf("%#v", newPost))
+
+	commentID, err := db.CreateBlogComment(inMemDB, newPost)
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error creating new blog post"))
+		return
+	}
+
+	log(funcname, "Created new comment on", articleID, commentID)
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: CreateBlogPostResponse{ID: commentID}})
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
+	} else {
+		w.Write(resp)
+	}
+}
+
 func main() {
 	const funcname = "main"
 	r := mux.NewRouter()
@@ -217,6 +311,9 @@ func main() {
 
 	r.HandleFunc("/blog/{id}", getSingleBlogPostHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog/{id}", deleteBlogPostHandler).Methods(http.MethodDelete)
+
+	r.HandleFunc("/blog/{id}/comment", getBlogCommentsIDsHandler).Methods(http.MethodGet)
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler).Methods(http.MethodPost)
 
 	http.Handle("/", r)
 

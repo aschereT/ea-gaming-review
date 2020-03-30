@@ -27,7 +27,9 @@ Comments are made on blog posts and show comment text (plain text) and an author
 
 `DELETE /blog/{id}` -> delete post (and its comments)
 
-`GET /blog/{id}/comment` -> get comments
+`GET /blog/{id}/comment` -> get list of comment IDs
+
+`GET /blog/{id}/comment/{commentid}` -> get a comment
 
 `POST /blog/{id}/comment` -> add a comment
 

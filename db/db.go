@@ -1,6 +1,8 @@
 package db
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/go-memdb"
 	"github.com/segmentio/ksuid"
 )
@@ -13,8 +15,8 @@ type BlogPost struct {
 	AuthorName  string `json:"AuthorName"`
 }
 
-//Comment represents a comment on a BlogPost
-type Comment struct {
+//BlogComment represents a comment on a BlogPost
+type BlogComment struct {
 	ID          string `json:"ID"`
 	ArticleID   string `json:"ArticleID"`
 	CommentText string `json:"CommentText"`
@@ -91,6 +93,18 @@ func CreateDB() (*memdb.MemDB, error) {
 	return db, nil
 }
 
+func checkBlogPostExists(txn *memdb.Txn, articleID string) (exists bool, err error) {
+	//check if blog post exists
+	foundObj, err := txn.First(BlogPostTable, "id", articleID)
+	if err != nil {
+		return false, err
+	}
+	if foundObj == nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 //Inserts a new post, generating a unique ID for it and returning that
 func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) {
 	txn := inMemDB.Txn(true)
@@ -135,7 +149,7 @@ func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
 
 	foundObj, err := txn.First(BlogPostTable, "id", id)
 	if err != nil {
-		return
+		return nil, err
 	}
 	if foundObj == nil {
 		return nil, nil
@@ -164,4 +178,56 @@ func DeleteBlogPost(inMemDB *memdb.MemDB, id string) (exists bool, err error) {
 
 	txn.Commit()
 	return true, nil
+}
+
+//Inserts a new comment, generating a unique ID for it and returning that
+func CreateBlogComment(inMemDB *memdb.MemDB, comment BlogComment) (id string, err error) {
+	txn := inMemDB.Txn(true)
+
+	exists, err := checkBlogPostExists(txn, comment.ArticleID)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", fmt.Errorf("No such blog post")
+	}
+
+	id = ksuid.New().String()
+	comment.ID = id
+	err = txn.Insert(CommentsTable, comment)
+
+	if err != nil {
+		txn.Abort()
+		return "", err
+	}
+
+	txn.Commit()
+	return id, nil
+}
+
+//Returns a list of all blog IDs
+//TODO: pagination?
+func GetCommentIDs(inMemDB *memdb.MemDB, articleID string) (ids []string, err error) {
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	exists, err := checkBlogPostExists(txn, articleID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("No such blog post")
+	}
+
+	it, err := txn.Get(CommentsTable, "articleid", articleID)
+	if err != nil {
+		return nil, err
+	}
+
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		p := obj.(BlogComment)
+		ids = append(ids, p.ID)
+	}
+
+	return ids, nil
 }

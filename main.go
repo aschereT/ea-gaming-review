@@ -236,6 +236,37 @@ func getBlogCommentsIDsHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func getSingleBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
+	const funcname = "getSingleBlogCommentHandler"
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	articleID := vars["aricleID"]
+	post, err := db.GetBlogComment(inMemDB, articleID, id)
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error getting blog post"))
+		return
+	}
+	if post == nil {
+		err = fmt.Errorf("No post found with ID %s", id)
+		logError(funcname, err)
+		respondWithError(w, http.StatusNotFound, err)
+		return
+	}
+
+	log(funcname, "Got blog post", id)
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: *post})
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
+	} else {
+		w.Write(resp)
+	}
+}
+
 func createBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
 	const funcname = "createBlogCommentHandler"
 	w.Header().Set("Content-Type", "application/json")
@@ -301,6 +332,37 @@ func createBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func deleteBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
+	const funcname = "deleteBlogCommentHandler"
+	w.Header().Set("Content-Type", "application/json")
+
+	vars := mux.Vars(req)
+	id := vars["id"]
+	articleID := vars["aricleID"]
+	exists, err := db.DeleteBlogComment(inMemDB, articleID, id)
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error deleting blog post"))
+		return
+	}
+	if !exists {
+		err = fmt.Errorf("No post found with ID %s", id)
+		logError(funcname, err)
+		respondWithError(w, http.StatusNotFound, err)
+		return
+	}
+
+	log(funcname, "Deleted blog post", id)
+	w.WriteHeader(http.StatusOK)
+	resp, err := json.Marshal(Response{Data: "OK"})
+	if err != nil {
+		logError(funcname, err)
+		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
+	} else {
+		w.Write(resp)
+	}
+}
+
 func main() {
 	const funcname = "main"
 	r := mux.NewRouter()
@@ -315,6 +377,8 @@ func main() {
 	r.HandleFunc("/blog/{id}/comment", getBlogCommentsIDsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler).Methods(http.MethodPost)
 
+	r.HandleFunc("/blog/{id}/comment/{articleID}", getSingleBlogCommentHandler).Methods(http.MethodGet)
+	r.HandleFunc("/blog/{id}/comment/{articleID}", deleteBlogCommentHandler).Methods(http.MethodDelete)
 	http.Handle("/", r)
 
 	inMemDB = setupDB()

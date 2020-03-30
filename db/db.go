@@ -65,7 +65,7 @@ var InMemSchema = &memdb.DBSchema{
 				"articleid": &memdb.IndexSchema{
 					Name:    "articleid",
 					Unique:  false,
-					Indexer: &memdb.UUIDFieldIndex{Field: "ArticleID"},
+					Indexer: &memdb.StringFieldIndex{Field: "ArticleID"},
 				},
 				"commenttext": &memdb.IndexSchema{
 					Name:    "commenttext",
@@ -93,33 +93,97 @@ func CreateDB() (*memdb.MemDB, error) {
 	return db, nil
 }
 
-func checkBlogPostExists(txn *memdb.Txn, articleID string) (exists bool, err error) {
-	//check if blog post exists
+//parent should already grab a transaction handler already
+func getBlogPostWithTxn(txn *memdb.Txn, articleID string) (post *BlogPost, err error) {
 	foundObj, err := txn.First(BlogPostTable, "id", articleID)
+	if err != nil {
+		return nil, err
+	}
+	if foundObj == nil {
+		return nil, nil
+	}
+
+	foundPost := foundObj.(BlogPost)
+	return &foundPost, nil
+}
+
+//parent should already grab a transaction handler already
+func getBlogCommentWithTxn(txn *memdb.Txn, commentID string) (comment *BlogComment, err error) {
+	foundObj, err := txn.First(CommentsTable, "id", commentID)
+	if err != nil {
+		return nil, err
+	}
+	if foundObj == nil {
+		return nil, nil
+	}
+
+	foundComment := foundObj.(BlogComment)
+	return &foundComment, nil
+}
+
+//parent should already grab a transaction handler already
+func getBlogCommentIDsWithTxn(txn *memdb.Txn, articleID string) (ids []string, err error) {
+	post, err := getBlogPostWithTxn(txn, articleID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, fmt.Errorf("No such blog post")
+	}
+
+	it, err := txn.Get(CommentsTable, "articleid", articleID)
+	if err != nil {
+		return nil, err
+	}
+
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		p := obj.(BlogComment)
+		ids = append(ids, p.ID)
+	}
+
+	return ids, nil
+}
+
+//parent should already grab a transaction handler already
+func deleteBlogCommentIDsWithTxn(txn *memdb.Txn, articleID, commentID string) (exists bool, err error) {
+	blogPost, err := getBlogPostWithTxn(txn, articleID)
 	if err != nil {
 		return false, err
 	}
-	if foundObj == nil {
-		return false, nil
+	if blogPost == nil {
+		return false, fmt.Errorf("No such blog post")
 	}
+
+	toDeleteObject, err := getBlogCommentWithTxn(txn, commentID)
+	if err != nil {
+		return false, err
+	}
+	if toDeleteObject == nil {
+		return false, fmt.Errorf("No such comment")
+	}
+
+	err = txn.Delete(CommentsTable, toDeleteObject)
+	if err != nil {
+		return true, err
+	}
+
 	return true, nil
 }
 
 //Inserts a new post, generating a unique ID for it and returning that
 func CreateBlogPost(inMemDB *memdb.MemDB, post BlogPost) (id string, err error) {
 	txn := inMemDB.Txn(true)
+	defer txn.Abort()
 
 	id = ksuid.New().String()
 	post.ID = id
 	err = txn.Insert(BlogPostTable, post)
 
 	if err != nil {
-		txn.Abort()
 		return
 	}
 
 	txn.Commit()
-
 	return id, nil
 }
 
@@ -147,21 +211,15 @@ func GetBlogPost(inMemDB *memdb.MemDB, id string) (post *BlogPost, err error) {
 	txn := inMemDB.Txn(false)
 	defer txn.Abort()
 
-	foundObj, err := txn.First(BlogPostTable, "id", id)
-	if err != nil {
-		return nil, err
-	}
-	if foundObj == nil {
-		return nil, nil
-	}
-
-	foundPost := foundObj.(BlogPost)
-	return &foundPost, nil
+	return getBlogPostWithTxn(txn, id)
 }
 
-//Deletes a single post. exists indicates if err is 404 or something else
-func DeleteBlogPost(inMemDB *memdb.MemDB, id string) (exists bool, err error) {
-	toDeleteObject, err := GetBlogPost(inMemDB, id)
+//Deletes a single post and its attendant comments. exists indicates if err is 404 or something else
+func DeleteBlogPost(inMemDB *memdb.MemDB, articleID string) (exists bool, err error) {
+	txn := inMemDB.Txn(true)
+	defer txn.Abort()
+
+	toDeleteObject, err := getBlogPostWithTxn(txn, articleID)
 	if err != nil {
 		return false, err
 	}
@@ -169,26 +227,64 @@ func DeleteBlogPost(inMemDB *memdb.MemDB, id string) (exists bool, err error) {
 		return false, nil
 	}
 
-	txn := inMemDB.Txn(true)
 	err = txn.Delete(BlogPostTable, toDeleteObject)
 	if err != nil {
-		txn.Abort()
 		return true, err
 	}
 
+	commentsToDelete, err := getBlogCommentIDsWithTxn(txn, articleID)
+	if err != nil {
+		return true, err
+	}
+
+	for _, commentID := range commentsToDelete {
+		exists, err := deleteBlogCommentIDsWithTxn(txn, articleID, commentID)
+		if err != nil {
+			return true, err
+		}
+		if !exists {
+			return true, fmt.Errorf("Error deleting comment %s for blog post %s", commentID, articleID)
+		}
+	}
 	txn.Commit()
 	return true, nil
+}
+
+//Returns a list of all comment IDs on the given articleID
+//TODO: pagination?
+func GetCommentIDs(inMemDB *memdb.MemDB, articleID string) (ids []string, err error) {
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	return getBlogCommentIDsWithTxn(txn, articleID)
+}
+
+//Gets a single comment. comment is nil if such comment is not found
+func GetBlogComment(inMemDB *memdb.MemDB, articleID, id string) (comment *BlogComment, err error) {
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	post, err := getBlogPostWithTxn(txn, articleID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, fmt.Errorf("No such blog post")
+	}
+
+	return getBlogCommentWithTxn(txn, id)
 }
 
 //Inserts a new comment, generating a unique ID for it and returning that
 func CreateBlogComment(inMemDB *memdb.MemDB, comment BlogComment) (id string, err error) {
 	txn := inMemDB.Txn(true)
+	defer txn.Abort()
 
-	exists, err := checkBlogPostExists(txn, comment.ArticleID)
+	post, err := getBlogPostWithTxn(txn, comment.ArticleID)
 	if err != nil {
 		return "", err
 	}
-	if !exists {
+	if post == nil {
 		return "", fmt.Errorf("No such blog post")
 	}
 
@@ -197,7 +293,6 @@ func CreateBlogComment(inMemDB *memdb.MemDB, comment BlogComment) (id string, er
 	err = txn.Insert(CommentsTable, comment)
 
 	if err != nil {
-		txn.Abort()
 		return "", err
 	}
 
@@ -205,29 +300,18 @@ func CreateBlogComment(inMemDB *memdb.MemDB, comment BlogComment) (id string, er
 	return id, nil
 }
 
-//Returns a list of all blog IDs
-//TODO: pagination?
-func GetCommentIDs(inMemDB *memdb.MemDB, articleID string) (ids []string, err error) {
-	txn := inMemDB.Txn(false)
+//Deletes a single comment. exists indicates if err is 404 or something else
+func DeleteBlogComment(inMemDB *memdb.MemDB, articleID, commentID string) (exists bool, err error) {
+	txn := inMemDB.Txn(true)
 	defer txn.Abort()
 
-	exists, err := checkBlogPostExists(txn, articleID)
+	exists, err = deleteBlogCommentIDsWithTxn(txn, articleID, commentID)
 	if err != nil {
-		return nil, err
+		return exists, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("No such blog post")
+		return exists, err
 	}
-
-	it, err := txn.Get(CommentsTable, "articleid", articleID)
-	if err != nil {
-		return nil, err
-	}
-
-	for obj := it.Next(); obj != nil; obj = it.Next() {
-		p := obj.(BlogComment)
-		ids = append(ids, p.ID)
-	}
-
-	return ids, nil
+	txn.Commit()
+	return exists, err
 }

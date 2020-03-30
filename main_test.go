@@ -288,7 +288,7 @@ func Test_CreateBlogPostMissingAuthorName(t *testing.T) {
 		t.Error(err)
 	}
 
-	expectedError := "ArticleText should not be empty"
+	expectedError := "AuthorName should not be empty"
 	if actualResponse.Error != expectedError {
 		t.Errorf("Expected error to be %s, got %s", expectedError, actualResponse.Error)
 	}

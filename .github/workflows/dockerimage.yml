@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag ascheret/ea-gaming-review:$(date +%s)
+      run: docker build . --file Dockerfile --tag ascheret/easerver:latest
     
     - name: Publish Docker
       uses: elgohr/Publish-Docker-Github-Action@2.14
@@ -26,3 +26,4 @@ jobs:
         username: ascheret
         # The login password for the registry
         password: ${{ secrets.EA_SERVER_DOCKER_HUB }}
+        

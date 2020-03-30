@@ -269,3 +269,187 @@ func Test_GetBlogComment(t *testing.T) {
 		}
 	}
 }
+
+func Test_GetBlogCommentIDs(t *testing.T) {
+	db, err := CreateDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	blogPosts := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	for i := range blogPosts {
+		id, err := CreateBlogPost(db, blogPosts[i])
+		if err != nil {
+			t.Error(err)
+		}
+		blogPosts[i].ID = id
+	}
+
+	expectedComments := []BlogComment{}
+	for i := range blogPosts {
+		expectedComments = append(expectedComments, BlogComment{ArticleID: blogPosts[i].ID, AuthorName: "firstposter", CommentText: "First!"},
+			BlogComment{ArticleID: blogPosts[i].ID, AuthorName: "spammer", CommentText: "Learn how to get hired with this one weird trick!"})
+	}
+
+	for i, comment := range expectedComments {
+		id, err := CreateBlogComment(db, comment)
+		if err != nil {
+			t.Error(err)
+		}
+		expectedComments[i].ID = id
+	}
+
+	for _, post := range blogPosts {
+		articleID := post.ID
+		actualCommentIDs, err := GetCommentIDs(db, articleID)
+		if err != nil {
+			t.Error(err)
+		}
+
+		expectedCommentIDs := func (comments []BlogComment, articleID string) (result []string) {
+			for _, comment := range comments {
+				if comment.ArticleID == articleID {
+					result = append(result, comment.ID)
+				}
+			}
+			return result
+		}(expectedComments, articleID)
+
+		if len(expectedCommentIDs) != len(actualCommentIDs) {
+			t.Errorf("Expected %d IDs, got %d IDs", len(expectedCommentIDs), len(actualCommentIDs))
+		}
+
+		sort.Strings(expectedCommentIDs)
+		sort.Strings(actualCommentIDs)
+		if !reflect.DeepEqual(expectedCommentIDs, actualCommentIDs) {
+			t.Errorf("Expected IDs %#v, got %#v", expectedCommentIDs, actualCommentIDs)
+		}
+	}
+
+}
+func Test_DeleteBlogComment(t *testing.T) {
+	db, err := CreateDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	blogPosts := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	for i := range blogPosts {
+		id, err := CreateBlogPost(db, blogPosts[i])
+		if err != nil {
+			t.Error(err)
+		}
+		blogPosts[i].ID = id
+	}
+
+	expectedComments := []BlogComment{}
+	for i := range blogPosts {
+		expectedComments = append(expectedComments, BlogComment{ArticleID: blogPosts[i].ID, AuthorName: "firstposter", CommentText: "First!"},
+			BlogComment{ArticleID: blogPosts[i].ID, AuthorName: "spammer", CommentText: "Learn how to get hired with this one weird trick!"})
+	}
+
+	for i, comment := range expectedComments {
+		id, err := CreateBlogComment(db, comment)
+		if err != nil {
+			t.Error(err)
+		}
+		expectedComments[i].ID = id
+	}
+
+	for _, comment := range expectedComments {
+		exists, err := DeleteBlogComment(db, comment.ArticleID, comment.ID)
+		if err != nil {
+			t.Error(err)
+		}
+		if !exists {
+			t.Errorf("Expected comment to be deleted to have existed, got %v", exists)
+		}
+	}
+
+	for _, comment := range expectedComments {
+		actualComment, err := GetBlogComment(db, comment.ArticleID, comment.ID)
+		if err != nil {
+			t.Error(err)
+		}
+		if actualComment != nil {
+			t.Errorf("Expected comment to have been deleted, got %#v", *actualComment)
+		}
+	}
+}
+
+func Test_DeleteBlogPost_WithComments(t *testing.T) {
+	db, err := CreateDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedBlogPosts := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	for i := range expectedBlogPosts {
+		id, err := CreateBlogPost(db, expectedBlogPosts[i])
+		if err != nil {
+			t.Error(err)
+		}
+		expectedBlogPosts[i].ID = id
+	}
+
+	expectedComments := []BlogComment{}
+	for _, post := range expectedBlogPosts {
+		expectedComments = append(expectedComments, BlogComment{ArticleID: post.ID, AuthorName: "firstposter", CommentText: "First!"},
+			BlogComment{ArticleID: post.ID, AuthorName: "spammer", CommentText: "Learn how to get hired with this one weird trick!"})
+	}
+
+	for i, comment := range expectedComments {
+		id, err := CreateBlogComment(db, comment)
+		if err != nil {
+			t.Error(err)
+		}
+		expectedComments[i].ID = id
+	}
+
+	for i := range expectedBlogPosts {
+		ex, err := DeleteBlogPost(db, expectedBlogPosts[i].ID)
+		if err != nil {
+			t.Error(err)
+		}
+		if !ex {
+			t.Errorf("Expected post to have existed, got %v", ex)
+		}
+	}
+
+	for i := range expectedBlogPosts {
+		txn := db.Txn(false)
+		defer txn.Abort()
+
+		post, err := txn.First(BlogPostTable, "id", expectedBlogPosts[i].ID)
+		if err != nil {
+			t.Error(err)
+		}
+		if post != nil {
+			t.Errorf("Expected post to be deleted, but still exists %#v", post)
+		}
+	}
+
+	for _, comment := range expectedComments {
+		actualComment, err := GetBlogComment(db, comment.ArticleID, comment.ID)
+		if err == nil {
+			t.Errorf("Expected error when getting comments whose parent blog post have been deleted, %#v", comment)
+		}
+		if actualComment != nil {
+			t.Errorf("Expected comment to have been deleted, got %#v", *actualComment)
+		}
+	}
+
+	txn := db.Txn(false)
+	defer txn.Abort()
+	for _, comment := range expectedComments {
+		actualComment, err := txn.First(CommentsTable, "id", comment.ID)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if actualComment != nil {
+			ac := actualComment.(BlogComment)
+			t.Errorf("Expected comments to have been deleted, got %#v", ac)
+		}
+	}
+}

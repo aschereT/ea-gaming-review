@@ -35,12 +35,11 @@ Comments are made on blog posts and show comment text (plain text) and an author
 
 `POST /blog/{id}/comment` -> add a comment
 
-## Running
+## Running from prebuilt image
 
-### From prebuilt image
 Run `docker run -a STDOUT -a STDERR --rm -p 8080:8080 ascheret/easerver:latest`
 
-See below for building locally
+## Development
 
 ### Requirements
 
@@ -48,9 +47,14 @@ See below for building locally
 - `docker`
 - `docker-compose`
 - `Insomnia`
+- Nothing is using port `8080` (or whichever port you remap to in `docker-compose.yml`)
 
 ### Steps
 
 1. Execute `make`
 2. Import `insomnia.json` into Insomnia
 3. Interact with the API
+
+### Running tests
+
+1. Run `make test`

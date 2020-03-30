@@ -4,6 +4,7 @@ WORKDIR /app
 ADD . .
 
 # RUN go build -ldflags="-s -w" -o ea-gaming-review
+RUN apk add build-base
 RUN go build -o ea-gaming-review
 
 FROM alpine:3.11.5 AS final

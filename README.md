@@ -33,6 +33,11 @@ Comments are made on blog posts and show comment text (plain text) and an author
 
 ## Running
 
+### From prebuilt image
+Run `docker run -a STDOUT -a STDERR --rm -p 8080:8080 ascheret/easerver:latest`
+
+See below for building locally
+
 ### Requirements
 
 - `make`

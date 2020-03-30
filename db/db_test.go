@@ -86,7 +86,6 @@ func Test_GetBlogIDs(t *testing.T) {
 	}
 }
 
-
 func Test_GetBlogPost(t *testing.T) {
 	db, err := CreateDB()
 	if err != nil {
@@ -107,6 +106,60 @@ func Test_GetBlogPost(t *testing.T) {
 		}
 		if *post != expected[i] {
 			t.Errorf("Expected created post to be %#v, got %#v", expected[i], *post)
+		}
+	}
+}
+
+func Test_GetBlogPost_Nonexistent(t *testing.T) {
+	db, err := CreateDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	post, err := GetBlogPost(db, "this_id_doesnt_exist")
+	if err != nil {
+		t.Error(err)
+	}
+	if post != nil {
+		t.Errorf("Expected post to not exist, got %#v", *post)
+	}
+}
+
+func Test_DeleteBlogPost(t *testing.T) {
+	db, err := CreateDB()
+	if err != nil {
+		t.Error(err)
+	}
+
+	expected := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	for i := range expected {
+		id, err := CreateBlogPost(db, expected[i])
+		if err != nil {
+			t.Error(err)
+		}
+		expected[i].ID = id
+	}
+
+	for i := range expected {
+		ex, err := DeleteBlogPost(db, expected[i].ID)
+		if err != nil {
+			t.Error(err)
+		}
+		if !ex {
+			t.Errorf("Expected post to have existed, got %v", ex)
+		}
+	}
+
+	for i := range expected {
+		txn := db.Txn(false)
+		defer txn.Abort()
+
+		post, err := txn.First(BlogPostTable, "id", expected[i].ID)
+		if err != nil {
+			t.Error(err)
+		}
+		if post != nil {
+			t.Errorf("Expected post to be deleted, but still exists %#v", post)
 		}
 	}
 }

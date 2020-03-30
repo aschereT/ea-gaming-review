@@ -128,7 +128,7 @@ func getBlogCommentIDsWithTxn(txn *memdb.Txn, articleID string) (ids []string, e
 		return nil, err
 	}
 	if post == nil {
-		return nil, fmt.Errorf("No such blog post")
+		return nil, fmt.Errorf("No such blog post %s", articleID)
 	}
 
 	it, err := txn.Get(CommentsTable, "articleid", articleID)
@@ -151,7 +151,7 @@ func deleteBlogCommentIDsWithTxn(txn *memdb.Txn, articleID, commentID string) (e
 		return false, err
 	}
 	if blogPost == nil {
-		return false, fmt.Errorf("No such blog post")
+		return false, fmt.Errorf("No such blog post %s", articleID)
 	}
 
 	toDeleteObject, err := getBlogCommentWithTxn(txn, commentID)
@@ -159,7 +159,7 @@ func deleteBlogCommentIDsWithTxn(txn *memdb.Txn, articleID, commentID string) (e
 		return false, err
 	}
 	if toDeleteObject == nil {
-		return false, fmt.Errorf("No such comment")
+		return false, fmt.Errorf("No such comment %s", commentID)
 	}
 
 	err = txn.Delete(CommentsTable, toDeleteObject)
@@ -227,11 +227,6 @@ func DeleteBlogPost(inMemDB *memdb.MemDB, articleID string) (exists bool, err er
 		return false, nil
 	}
 
-	err = txn.Delete(BlogPostTable, toDeleteObject)
-	if err != nil {
-		return true, err
-	}
-
 	commentsToDelete, err := getBlogCommentIDsWithTxn(txn, articleID)
 	if err != nil {
 		return true, err
@@ -246,6 +241,12 @@ func DeleteBlogPost(inMemDB *memdb.MemDB, articleID string) (exists bool, err er
 			return true, fmt.Errorf("Error deleting comment %s for blog post %s", commentID, articleID)
 		}
 	}
+
+	err = txn.Delete(BlogPostTable, toDeleteObject)
+	if err != nil {
+		return true, err
+	}
+
 	txn.Commit()
 	return true, nil
 }

@@ -33,11 +33,19 @@ func healthCheckHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func logError(funcname string, err error) {
-	fmt.Printf("[%s] %s: %w\n", time.Now().String(), funcname, err)
+	fmt.Printf("[%s] %s: %s\n", time.Now().String(), funcname, err)
 }
 
 func log(funcname string, a ...interface{}) {
 	fmt.Println(fmt.Sprintf("[%s] %s:", time.Now().String(), funcname), a)
+}
+
+func setupDB() *memdb.MemDB {
+	newDB, err := db.CreateDB()
+	if err != nil {
+		panic(err)
+	}
+	return newDB
 }
 
 //immediately respond with Data nil: and Error: err
@@ -197,14 +205,6 @@ func deleteBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		w.Write(resp)
 	}
-}
-
-func setupDB() *memdb.MemDB {
-	newDB, err := db.CreateDB()
-	if err != nil {
-		panic(err)
-	}
-	return newDB
 }
 
 func main() {

@@ -19,14 +19,17 @@ Comments are made on blog posts and show comment text (plain text) and an author
 
 ## Endpoints
 
-GET /blog -> returns list of blog posts IDs (pagination?)
-POST /blog -> add a new posts
+`GET /blog` -> returns list of blog posts IDs (pagination?)
 
-GET /blog/?id -> returns a blog post (without comments)
-DELETE /blog/?id -> delete post (and its comments)
+`POST /blog` -> add a new posts
 
-GET /blog/?id/comment -> get comments
-POST /blog/?id/comment -> add a comment
+`GET /blog/{id}` -> returns a blog post (without comments)
+
+`DELETE /blog/{id}` -> delete post (and its comments)
+
+`GET /blog/{id}/comment` -> get comments
+
+`POST /blog/{id}/comment` -> add a comment
 
 ## Running
 

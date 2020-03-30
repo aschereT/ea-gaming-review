@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/aschereT/ea-gaming-review/db"
@@ -224,12 +223,8 @@ func main() {
 	inMemDB = setupDB()
 
 	const DefaultAddr = ":8080"
-	envPort, exists := os.LookupEnv("EASERV_PORT")
-	if !exists {
-		envPort = DefaultAddr
-	}
-	log(funcname, "server up, listening at", envPort)
-	err := http.ListenAndServe(envPort, nil)
+	log(funcname, "server up, listening at :8080")
+	err := http.ListenAndServe(DefaultAddr, nil)
 	if err != nil {
 		panic(err)
 	}

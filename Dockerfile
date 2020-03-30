@@ -13,5 +13,5 @@ RUN apk add --no-cache curl
 COPY --from=build /app/ea-gaming-review ./
 
 EXPOSE 8080
-HEALTHCHECK CMD curl --fail http://localhost:8080/ || exit 1
+HEALTHCHECK CMD curl --fail http://localhost:8080/health || exit 1
 ENTRYPOINT [ "/app/ea-gaming-review" ]

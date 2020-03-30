@@ -27,7 +27,7 @@ func Test_CreateBlogPost(t *testing.T) {
 		t.Error(err)
 	}
 
-	expected := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"},BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	expected := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
 	for i := range expected {
 		id, err := CreateBlogPost(db, expected[i])
 		if err != nil {
@@ -54,14 +54,13 @@ func Test_CreateBlogPost(t *testing.T) {
 	}
 }
 
-
 func Test_GetBlogIDs(t *testing.T) {
 	db, err := CreateDB()
 	if err != nil {
 		t.Error(err)
 	}
 
-	sampleBlogPosts := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"},BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
+	sampleBlogPosts := []BlogPost{BlogPost{Title: "Test Title 1", ArticleText: "Test Body 1", AuthorName: "Test Author Name 1"}, BlogPost{Title: "Test Title 2", ArticleText: "Test Body 2", AuthorName: "Test Author Name 2"}}
 	expected := []string{}
 	for i := range sampleBlogPosts {
 		id, err := CreateBlogPost(db, sampleBlogPosts[i])

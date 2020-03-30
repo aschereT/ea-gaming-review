@@ -1,0 +1,8 @@
+version: "3.7"
+services:
+  easerver:
+    image: "ascheret/easerver:latest"
+    container_name: "easerver"
+    build: .
+    ports:
+      - "8080:8080"

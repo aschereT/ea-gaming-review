@@ -27,3 +27,18 @@ DELETE /blog/?id -> delete post (and its comments)
 
 GET /blog/?id/comment -> get comments
 POST /blog/?id/comment -> add a comment
+
+## Running
+
+### Requirements
+
+- `make`
+- `docker`
+- `docker-compose`
+- `Insomnia`
+
+### Steps
+
+1. Execute `make`
+2. Import `insomnia.json` into Insomnia
+3. Interact with the API

@@ -37,7 +37,7 @@ Comments are made on blog posts and show comment text (plain text) and an author
 
 ## Running from prebuilt image
 
-Run `docker run -a STDOUT -a STDERR --rm -p 8080:8080 ascheret/easerver:latest`
+Run `docker run -t --rm -p 8080:8080 ascheret/easerver:latest`
 
 ## Development
 

@@ -58,3 +58,8 @@ Run `docker run -t --rm -p 8080:8080 ascheret/easerver:latest`
 ### Running tests
 
 1. Run `make test`
+
+## TODOs
+
+- Authentication/Authorization
+- Frontend

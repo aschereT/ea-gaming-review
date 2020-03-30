@@ -16,3 +16,13 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag ascheret/ea-gaming-review:$(date +%s)
+    
+    - name: Publish Docker
+      uses: elgohr/Publish-Docker-Github-Action@2.14
+      with:
+        # The name of the image you would like to push
+        name: ascheret/easerver
+        # The login username for the registry
+        username: ascheret
+        # The login password for the registry
+        password: ${{ secrets.EA_SERVER_DOCKER_HUB }}

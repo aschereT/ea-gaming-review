@@ -9,7 +9,15 @@ import (
 	"testing"
 
 	"github.com/aschereT/ea-gaming-review/db"
+	"github.com/gorilla/mux"
 )
+
+type expectedResponseCreateBlogPost struct {
+	Data struct {
+		ID string `json:"ID"`
+	} `json:"Data"`
+	Error string `json:"Error"`
+}
 
 func Test_HealthCheck(t *testing.T) {
 	req, err := http.NewRequest(http.MethodGet, "/health", nil)
@@ -71,7 +79,7 @@ func Test_RespondWithError(t *testing.T) {
 	}
 }
 
-func Test_CreateBlogPostHappy(t *testing.T) {
+func Test_CreateBlogPost(t *testing.T) {
 	//set up in-mem db, and tear down after
 	inMemDB = setupDB()
 	defer func() {
@@ -94,13 +102,7 @@ func Test_CreateBlogPostHappy(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
 	}
 
-	type expectedResponseType struct {
-		Data struct {
-			ID string `json:"ID"`
-		} `json:"Data"`
-		Error string `json:"Error"`
-	}
-	var actualResponse expectedResponseType
+	var actualResponse expectedResponseCreateBlogPost
 	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
 	if err != nil {
 		t.Error(err)
@@ -130,7 +132,7 @@ func Test_CreateBlogPostHappy(t *testing.T) {
 	}
 }
 
-func Test_CreateBlogPostMissingTitle(t *testing.T) {
+func Test_CreateBlogPost_MissingTitle(t *testing.T) {
 	//set up in-mem db, and tear down after
 	inMemDB = setupDB()
 	defer func() {
@@ -171,7 +173,7 @@ func Test_CreateBlogPostMissingTitle(t *testing.T) {
 	}
 }
 
-func Test_CreateBlogPostWithID(t *testing.T) {
+func Test_CreateBlogPost_WithID(t *testing.T) {
 	//set up in-mem db, and tear down after
 	inMemDB = setupDB()
 	defer func() {
@@ -212,7 +214,7 @@ func Test_CreateBlogPostWithID(t *testing.T) {
 	}
 }
 
-func Test_CreateBlogPostMissingArticleText(t *testing.T) {
+func Test_CreateBlogPost_MissingArticleText(t *testing.T) {
 	//set up in-mem db, and tear down after
 	inMemDB = setupDB()
 	defer func() {
@@ -253,7 +255,7 @@ func Test_CreateBlogPostMissingArticleText(t *testing.T) {
 	}
 }
 
-func Test_CreateBlogPostMissingAuthorName(t *testing.T) {
+func Test_CreateBlogPost_MissingAuthorName(t *testing.T) {
 	//set up in-mem db, and tear down after
 	inMemDB = setupDB()
 	defer func() {
@@ -294,7 +296,7 @@ func Test_CreateBlogPostMissingAuthorName(t *testing.T) {
 	}
 }
 
-func Test_GetBlogPostIDsEmpty(t *testing.T) {
+func Test_GetBlogPostIDs_Empty(t *testing.T) {
 	inMemDB = setupDB()
 	defer func() {
 		inMemDB = nil
@@ -321,5 +323,171 @@ func Test_GetBlogPostIDsEmpty(t *testing.T) {
 
 	if actualBody != expectedBody {
 		t.Errorf("Expected body to be %s, got %s", expectedBody, actualBody)
+	}
+}
+
+func Test_GetSingleBlogPost(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	//add a post
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+	handler.ServeHTTP(rec, req)
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPost
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := actualResponse.Data.ID
+
+	//try to get it
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}", getSingleBlogPostHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	req, err = http.NewRequest(http.MethodGet, ts.URL+"/blog/"+id, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+	returnedBody := rec.Body.String()
+
+	expectedBody := "{\"Data\":{\"ID\":\"" + id + "\",\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}}"
+
+	if returnedBody != expectedBody {
+		t.Errorf("Expected actual body to match expected body, but differs: \nexpected: %s\nactual:   %s", expectedBody, returnedBody)
+	}
+}
+
+func Test_DeleteBlogPost(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	//add a post
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+	handler.ServeHTTP(rec, req)
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPost
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := actualResponse.Data.ID
+
+	//try to delete it
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}", deleteBlogPostHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	req, err = http.NewRequest(http.MethodDelete, ts.URL+"/blog/"+id, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+	returnedBody := rec.Body.String()
+
+	expectedBody := "{\"Data\":\"OK\"}"
+
+	if returnedBody != expectedBody {
+		t.Errorf("Expected actual body to match expected body, but differs: \nexpected: %s\nactual:   %s", expectedBody, returnedBody)
+	}
+
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	post, err := txn.First(db.BlogPostTable, "id", id)
+	if err != nil {
+		t.Error(err)
+	}
+	if post != nil {
+		coercedPost := post.(db.BlogPost)
+		t.Errorf("Expected post to be deleted, got %#v", coercedPost)
+	}
+}
+
+func Test_DeleteBlogPost_DoesntExist(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	id := "McDoesntExist"
+
+	//try to delete it
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}", deleteBlogPostHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/blog/"+id, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	returnedBody := rec.Body.String()
+	expectedBody := "{\"Error\":\"No post found with ID " + id + "\"}"
+
+	if returnedBody != expectedBody {
+		t.Errorf("Expected actual body to match expected body, but differs: \nexpected: %s\nactual:   %s", expectedBody, returnedBody)
+	}
+
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	post, err := txn.First(db.BlogPostTable, "id", id)
+	if err != nil {
+		t.Error(err)
+	}
+	if post != nil {
+		coercedPost := post.(db.BlogPost)
+		t.Errorf("Expected post to be deleted, got %#v", coercedPost)
 	}
 }

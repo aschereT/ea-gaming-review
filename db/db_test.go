@@ -306,7 +306,7 @@ func Test_GetBlogCommentIDs(t *testing.T) {
 			t.Error(err)
 		}
 
-		expectedCommentIDs := func (comments []BlogComment, articleID string) (result []string) {
+		expectedCommentIDs := func(comments []BlogComment, articleID string) (result []string) {
 			for _, comment := range comments {
 				if comment.ArticleID == articleID {
 					result = append(result, comment.ID)

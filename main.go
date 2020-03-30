@@ -242,14 +242,14 @@ func getSingleBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
 	id := vars["id"]
-	articleID := vars["aricleID"]
-	post, err := db.GetBlogComment(inMemDB, articleID, id)
+	commentID := vars["commentID"]
+	comment, err := db.GetBlogComment(inMemDB, id, commentID)
 	if err != nil {
 		logError(funcname, err)
 		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error getting blog post"))
 		return
 	}
-	if post == nil {
+	if comment == nil {
 		err = fmt.Errorf("No post found with ID %s", id)
 		logError(funcname, err)
 		respondWithError(w, http.StatusNotFound, err)
@@ -258,7 +258,7 @@ func getSingleBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
 
 	log(funcname, "Got blog post", id)
 	w.WriteHeader(http.StatusOK)
-	resp, err := json.Marshal(Response{Data: *post})
+	resp, err := json.Marshal(Response{Data: *comment})
 	if err != nil {
 		logError(funcname, err)
 		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
@@ -338,8 +338,8 @@ func deleteBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
 
 	vars := mux.Vars(req)
 	id := vars["id"]
-	articleID := vars["aricleID"]
-	exists, err := db.DeleteBlogComment(inMemDB, articleID, id)
+	commentID := vars["commentID"]
+	exists, err := db.DeleteBlogComment(inMemDB, id, commentID)
 	if err != nil {
 		logError(funcname, err)
 		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error deleting blog post"))
@@ -377,8 +377,8 @@ func main() {
 	r.HandleFunc("/blog/{id}/comment", getBlogCommentsIDsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler).Methods(http.MethodPost)
 
-	r.HandleFunc("/blog/{id}/comment/{articleID}", getSingleBlogCommentHandler).Methods(http.MethodGet)
-	r.HandleFunc("/blog/{id}/comment/{articleID}", deleteBlogCommentHandler).Methods(http.MethodDelete)
+	r.HandleFunc("/blog/{id}/comment/{commentID}", getSingleBlogCommentHandler).Methods(http.MethodGet)
+	r.HandleFunc("/blog/{id}/comment/{commentID}", deleteBlogCommentHandler).Methods(http.MethodDelete)
 	http.Handle("/", r)
 
 	inMemDB = setupDB()

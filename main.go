@@ -16,7 +16,7 @@ type Response struct {
 	Error string      `json:"Error,omitempty"`
 }
 
-type CreateBlogPostResponse struct {
+type CreateBlogPostOrCommentResponse struct {
 	ID string `json:"ID"`
 }
 
@@ -173,7 +173,7 @@ func createBlogPostHandler(w http.ResponseWriter, req *http.Request) {
 
 	log(funcname, "Created new blog post", id)
 	w.WriteHeader(http.StatusOK)
-	resp, err := json.Marshal(Response{Data: CreateBlogPostResponse{ID: id}})
+	resp, err := json.Marshal(Response{Data: CreateBlogPostOrCommentResponse{ID: id}})
 	if err != nil {
 		logError(funcname, err)
 		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))
@@ -323,7 +323,7 @@ func createBlogCommentHandler(w http.ResponseWriter, req *http.Request) {
 
 	log(funcname, "Created new comment on", articleID, commentID)
 	w.WriteHeader(http.StatusOK)
-	resp, err := json.Marshal(Response{Data: CreateBlogPostResponse{ID: commentID}})
+	resp, err := json.Marshal(Response{Data: CreateBlogPostOrCommentResponse{ID: commentID}})
 	if err != nil {
 		logError(funcname, err)
 		respondWithError(w, http.StatusInternalServerError, fmt.Errorf("Error marshalling response"))

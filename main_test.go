@@ -12,9 +12,17 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type expectedResponseCreateBlogPost struct {
+type expectedResponseCreateBlogPostOrComment struct {
 	Data struct {
 		ID string `json:"ID"`
+	} `json:"Data"`
+	Error string `json:"Error"`
+}
+
+type expectedResponseIDs struct {
+	Data struct {
+		IDs        []string `json:"IDs"`
+		BlogPostID string   `json:"BlogPostID"`
 	} `json:"Data"`
 	Error string `json:"Error"`
 }
@@ -102,7 +110,7 @@ func Test_CreateBlogPost(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
 	}
 
-	var actualResponse expectedResponseCreateBlogPost
+	var actualResponse expectedResponseCreateBlogPostOrComment
 	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
 	if err != nil {
 		t.Error(err)
@@ -110,10 +118,17 @@ func Test_CreateBlogPost(t *testing.T) {
 
 	id := actualResponse.Data.ID
 
-	post, err := db.GetBlogPost(inMemDB, id)
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	actualPost, err := txn.First(db.BlogPostTable, "id", id)
 	if err != nil {
 		t.Error(err)
 	}
+	if actualPost == nil {
+		t.Error("Expected post to make it into the DB, got nil")
+	}
+	post := actualPost.(db.BlogPost)
 
 	if post.AuthorName != "Dr. Eggman" {
 		t.Errorf("Expected author name to be Dr. Eggman, got %s", post.AuthorName)
@@ -348,7 +363,7 @@ func Test_GetSingleBlogPost(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
 	}
 
-	var actualResponse expectedResponseCreateBlogPost
+	var actualResponse expectedResponseCreateBlogPostOrComment
 	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
 	if err != nil {
 		t.Error(err)
@@ -403,7 +418,7 @@ func Test_DeleteBlogPost(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
 	}
 
-	var actualResponse expectedResponseCreateBlogPost
+	var actualResponse expectedResponseCreateBlogPostOrComment
 	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
 	if err != nil {
 		t.Error(err)
@@ -489,5 +504,431 @@ func Test_DeleteBlogPost_DoesntExist(t *testing.T) {
 	if post != nil {
 		coercedPost := post.(db.BlogPost)
 		t.Errorf("Expected post to be deleted, got %#v", coercedPost)
+	}
+}
+
+func Test_CreateBlogComment(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+
+	handler.ServeHTTP(rec, req)
+
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var createBlogResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &createBlogResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := createBlogResponse.Data.ID
+
+	//try to comment on the post
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/blog/"+id+"/comment", strings.NewReader("{\"AuthorName\": \"Anony Mouse\",\"CommentText\": \"this review sucks\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	commentID := actualResponse.Data.ID
+
+	//check if the comment made it into the DB
+	txn := inMemDB.Txn(false)
+	defer txn.Abort()
+
+	post, err := txn.First(db.CommentsTable, "id", commentID)
+	if err != nil {
+		t.Error(err)
+	}
+	if post == nil {
+		t.Error("Expected comment to be made, got nil")
+	}
+}
+
+func Test_CreateBlogComment_MissingCommentText(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+
+	handler.ServeHTTP(rec, req)
+
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var createBlogResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &createBlogResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := createBlogResponse.Data.ID
+
+	//try to comment on the post
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/blog/"+id+"/comment", strings.NewReader("{\"AuthorName\": \"Anony Mouse\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+
+	if actual.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedError := "CommentText should not be empty"
+	if actualResponse.Error != expectedError {
+		t.Errorf("Expected error to be %s, got %s", expectedError, actualResponse.Error)
+	}
+}
+
+func Test_CreateBlogComment_AddedID(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+
+	handler.ServeHTTP(rec, req)
+
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var createBlogResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &createBlogResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := createBlogResponse.Data.ID
+
+	//try to comment on the post
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/blog/"+id+"/comment", strings.NewReader("{\"AuthorName\": \"Anony Mouse\",\"CommentText\": \"this review sucks\",\"ID\":\"qwer\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+
+	if actual.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedError := "ID should not be defined in new post requests"
+	if actualResponse.Error != expectedError {
+		t.Errorf("Expected error to be %s, got %s", expectedError, actualResponse.Error)
+	}
+}
+func Test_CreateBlogComment_AddedArticleID(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+
+	handler.ServeHTTP(rec, req)
+
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var createBlogResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &createBlogResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := createBlogResponse.Data.ID
+
+	//try to comment on the post
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/blog/"+id+"/comment", strings.NewReader("{\"AuthorName\": \"Anony Mouse\",\"CommentText\": \"this review sucks\",\"ArticleID\":\"qwer\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+
+	if actual.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedError := "ArticleID should not be defined in new post requests"
+	if actualResponse.Error != expectedError {
+		t.Errorf("Expected error to be %s, got %s", expectedError, actualResponse.Error)
+	}
+}
+func Test_CreateBlogComment_MissingAuthorName(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+
+	handler.ServeHTTP(rec, req)
+
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var createBlogResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &createBlogResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := createBlogResponse.Data.ID
+
+	//try to comment on the post
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/blog/"+id+"/comment", strings.NewReader("{\"CommentText\": \"this review sucks\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.ServeHTTP(rec, req)
+
+	actual = rec.Result()
+
+	if actual.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status code %d, got %d", http.StatusBadRequest, actual.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	expectedError := "AuthorName should not be empty"
+	if actualResponse.Error != expectedError {
+		t.Errorf("Expected error to be %s, got %s", expectedError, actualResponse.Error)
+	}
+}
+func Test_GetBlogCommentsIDs_Empty(t *testing.T) {
+	//set up in-mem db, and tear down after
+	inMemDB = setupDB()
+	defer func() {
+		inMemDB = nil
+	}()
+
+	req, err := http.NewRequest(http.MethodPost, "/blog", strings.NewReader("{\"Title\":\"I've come to make an announcement\",\"ArticleText\":\"walnut moon\",\"AuthorName\":\"Dr. Eggman\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	rec := httptest.NewRecorder()
+	handler := http.HandlerFunc(createBlogPostHandler)
+
+	handler.ServeHTTP(rec, req)
+
+	commentResponse := rec.Result()
+
+	if commentResponse.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, commentResponse.StatusCode)
+	}
+
+	var createBlogResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &createBlogResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id := createBlogResponse.Data.ID
+
+	//try to comment on the post
+	r := mux.NewRouter()
+	r.HandleFunc("/blog/{id}/comment", createBlogCommentHandler)
+
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodPost, ts.URL+"/blog/"+id+"/comment", strings.NewReader("{\"AuthorName\": \"Anony Mouse\",\"CommentText\": \"this review sucks\"}"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.ServeHTTP(rec, req)
+
+	commentResponse = rec.Result()
+
+	if commentResponse.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, commentResponse.StatusCode)
+	}
+
+	var actualResponse expectedResponseCreateBlogPostOrComment
+	err = json.Unmarshal(rec.Body.Bytes(), &actualResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	commentID := actualResponse.Data.ID
+
+	getIDsRouter := mux.NewRouter()
+	getIDsRouter.HandleFunc("/blog/{id}/comment", getBlogCommentsIDsHandler)
+
+	ts2 := httptest.NewServer(getIDsRouter)
+	defer ts2.Close()
+
+	rec = httptest.NewRecorder()
+	req, err = http.NewRequest(http.MethodGet, ts2.URL+"/blog/"+id+"/comment", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	getIDsRouter.ServeHTTP(rec, req)
+
+	actual := rec.Result()
+
+	if actual.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, actual.StatusCode)
+	}
+
+	var getIDsResponse expectedResponseIDs
+	err = json.Unmarshal(rec.Body.Bytes(), &getIDsResponse)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if getIDsResponse.Error != "" {
+		t.Errorf("Expected no errors, got %s", getIDsResponse.Error)
+	}
+	if getIDsResponse.Data.BlogPostID != id {
+		t.Errorf("Expected comment parent to be %s, got %s", id, getIDsResponse.Data.BlogPostID)
+	}
+	if len(getIDsResponse.Data.IDs) != 1 {
+		t.Errorf("Expected number of comments on blog to be 1, got %d", len(getIDsResponse.Data.IDs))
+	}
+	if getIDsResponse.Data.IDs[0] != commentID {
+		t.Errorf("Expected comment ID to be %s, got %s", commentID, getIDsResponse.Data.IDs[0])
 	}
 }
